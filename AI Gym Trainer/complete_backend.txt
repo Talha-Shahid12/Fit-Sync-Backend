@@ -1,0 +1,317 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import cv2
+import numpy as np
+import base64
+import PoseModule as pm
+import math  # Import the math module
+import mediapipe as mp
+app = Flask(__name__)
+CORS(app)
+detector = pm.poseDetector()  # Assuming you have defined the poseDetector class
+dir = 0
+count = 0
+
+@app.route('/count_pushups', methods=['POST'])
+def countPushUps():
+    global detector, dir, count
+    
+    data = request.json
+    img_str = data['img']
+    img_bytes = base64.b64decode(img_str)
+    img_np = np.frombuffer(img_bytes, dtype=np.uint8)
+    img = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+    lmList = data['lmList']
+    detector.findPose(img, draw=False)
+    lmList = detector.findPosition(img, draw=False)
+    if lmList:
+        a1 = detector.findAngle(img, 11, 13, 15)
+        a2 = detector.findAngle(img, 16, 14, 12)
+        per_val1 = int(np.interp(a1, (190, 280), (0, 100)))
+        per_val2 = int(np.interp(a2, (70, 170), (100, 0)))
+        if per_val1 == 100 and per_val2 == 100:
+            if dir == 0:
+                count += 1
+                dir = 1
+        elif per_val1 == 0 and per_val2 == 0:
+            if dir == 1:
+                dir = 0
+                print(count)
+        push_ups = count / 2  # Use math.floor to floor the count value
+        text = f'push_ups : {int(push_ups)}'  # Update the text with the floored value
+        text_color = (0, 0, 255)
+        rectangle_color = (255, 0, 0)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 2
+        thickness = 3
+        text_size = cv2.getTextSize(text, font, font_scale, thickness)[0]
+        text_origin = (209, 35)
+        cv2.putText(img, text, text_origin, font, font_scale, text_color, thickness)
+        (startX, startY) = text_origin
+        endX = startX + text_size[0] + 10
+        endY = startY - text_size[1] - 10
+        cv2.rectangle(img, (startX, startY), (endX, endY), rectangle_color, thickness, cv2.FILLED)
+
+    # Encode the processed image to JPEG format for sending as JSON
+    _, img_encoded = cv2.imencode('.jpg', img)
+    img_str = base64.b64encode(img_encoded).decode('utf-8')
+
+    response_data = {
+        'lmList': lmList,
+        'count': count,  # Send the floored count value
+        'img': img_str  # Sending back the processed image
+    }
+    return jsonify(response_data)
+
+@app.route('/single-handed-curl', methods=['POST'])
+def single_handed_curl():
+    global detector, dir, count
+    
+    data = request.json
+    img_str = data['img']
+    img_bytes = base64.b64decode(img_str)
+    img_np = np.frombuffer(img_bytes, dtype=np.uint8)
+    img = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+    lmList = data['lmList']
+    detector.findPose(img, draw=False)
+    lmList = detector.findPosition(img, draw=False)
+    
+    if len(lmList) != 0:
+        angle = detector.findAngle(img, 12, 14, 16)
+        per = np.interp(angle, (140, 50), (0, 100))
+        
+        # Update count based on angle and direction
+        if per == 100:
+            if dir == 0:
+                count += 0.5
+                dir = 1
+        elif per == 0:
+            if dir == 1:
+                count += 0.5
+                dir = 0
+        else:
+            print("Unexpected value of per:", per)
+    
+        print("Current count:", count)
+        print("Current direction:", dir)
+
+        # Check for wrong posture
+        if angle < 140:
+            Wrong_Posture(img)
+
+        
+        # Add count to the image
+        cv2.putText(img, str(int(count)), (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 5, (255, 0, 0), 5, cv2.LINE_AA)
+
+    return jsonify({'lmList': lmList, 'count': math.floor(count)})  # Floor the count value
+
+@app.route('/reverse-fly', methods=['POST'])
+def Reverse_Fly():
+    global detector, dir, count
+    
+    data = request.json
+    img_str = data['img']
+    img_bytes = base64.b64decode(img_str)
+    img_np = np.frombuffer(img_bytes, dtype=np.uint8)
+    img = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+    lmList = data['lmList']
+    detector.findPose(img, draw=False)
+    lmList = detector.findPosition(img, draw=False)
+    
+    if len(lmList) != 0:
+        angle = detector.findAngle(img, 11, 13, 15)
+        per = np.interp(angle, (180, 210), (0, 100))
+        angle = detector.findAngle(img, 12, 14, 16)
+        if per == 100:
+            if dir == 0:
+                count += 0.5
+                dir = 1
+        if per == 0:
+            if dir == 1:
+                count += 0.5
+                dir = 0
+
+        cv2.putText(img, str(int(count)), (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 5, (255, 0, 0), 5, cv2.LINE_AA)
+    return jsonify({'lmList': lmList, 'count': math.floor(count)}) 
+
+
+@app.route('/barbell-curl', methods=['POST'])
+def barbell_curl():
+    global detector, dir, count
+    
+    data = request.json
+    img_str = data['img']
+    img_bytes = base64.b64decode(img_str)
+    img_np = np.frombuffer(img_bytes, dtype=np.uint8)
+    img = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+    lmList = data['lmList']
+    detector.findPose(img, draw=False)
+    lmList = detector.findPosition(img, draw=False)
+    if len(lmList) != 0:
+        angle = detector.findAngle(img, 12, 14, 16)
+        per = np.interp(angle, (170, 50), (0, 100))
+
+        if len(lmList) > 24:
+            x, y = lmList[24][1:]
+            x = x + 200
+            FPangle = detector.findAngle(img, 12, 24, (x, y), True, True)
+            print(FPangle)
+            cv2.circle(img, (x, y), 5, (255, 0, 0), cv2.FILLED)
+
+        if per == 100:
+            if dir == 0:
+                count += 0.5
+                dir = 1
+        if per == 0:
+            if dir == 1:
+                count += 0.5
+                dir = 0
+
+        PFangle = detector.findAngle(img, 12, 24, (x, y), True, True)
+        if (PFangle < 90 or PFangle > 100):
+            Wrong_Posture(img,"Wrong Angle")
+
+        cv2.putText(img, str(int(count)), (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 5, (255, 0, 0), 5, cv2.LINE_AA)
+    return jsonify({'lmList': lmList, 'count': math.floor(count)}) 
+
+
+counter = 0 
+
+@app.route('/dead-lift', methods = ['POST'])
+
+def deadlift():
+        # Deadlift counter variables
+    global detector, dir, count
+    
+    data = request.json
+    img_str = data['img']
+    img_bytes = base64.b64decode(img_str)
+    img_np = np.frombuffer(img_bytes, dtype=np.uint8)
+    cap = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+    lmList = data['lmList']
+    detector.findPose(cap, draw=False)
+    lmList = detector.findPosition(cap, draw=False)
+    
+    count = 0
+    stage = None
+
+        # Setup mediapipe instance
+    mp_pose = mp.solutions.pose
+    mp_drawing = mp.solutions.drawing_utils
+
+        # Initialize Pose instance
+    with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+            # Recolor image to RGB
+        image = cv2.cvtColor(cap, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+
+            # Make detection
+        results = pose.process(image)
+
+            # Recolor back to BGR
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            # Extract landmarks
+        try:
+            landmarks = results.pose_landmarks.landmark
+
+            leftHand = [landmarks[mp_pose.PoseLandmark.LEFT_INDEX.value].x,
+                        landmarks[mp_pose.PoseLandmark.LEFT_PINKY.value].y]
+            rightHand = [landmarks[mp_pose.PoseLandmark.RIGHT_INDEX.value].x,
+                        landmarks[mp_pose.PoseLandmark.RIGHT_PINKY.value].y]
+            print("Happening")
+
+                # Adjust these coordinates according to your setup
+            if (checkHandInBox(leftHand[0] * 640, leftHand[1] * 480, 590, 20, 670, 80) or checkHandInBox(
+                    rightHand[0] * 640, rightHand[1] * 480, 600, 0, 680, 60)):
+                print("Wrong View")
+
+                return
+
+            left_hand = landmarks[mp_pose.PoseLandmark.LEFT_INDEX.value]
+            right_hand = landmarks[mp_pose.PoseLandmark.RIGHT_INDEX.value]
+            left_knee = landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value]
+            right_knee = landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value]
+
+
+            if checkDeadlift(left_hand, right_hand, left_knee, right_knee,False):
+
+                if(stage == "down" and checkDeadlift(left_hand, right_hand, left_knee, right_knee, True)):
+
+                    stage = "up"
+                    count =count+1
+                    mytext = str(count)
+                    language = 'en'
+                    myobj = gTTS(text=mytext, lang=language, slow=True)
+                    print("should play")
+                    myobj.save("welcome" + str(count) + ".mp3")
+                    playsound("welcome" + str(count) + ".mp3")
+                    print(count)
+        except:
+            pass
+
+            # Setup status box
+        cv2.rectangle(image, (0, 0), (240, 73), (245, 117, 16), -1)
+
+            # Rep data
+        print("I am here")
+        cv2.putText(image, 'REPS', (15, 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+        cv2.putText(image, str(count),
+                    (10, 60),
+                    cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
+
+            # Stage data
+        cv2.putText(image, 'STAGE', (85, 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+        cv2.putText(image, stage,
+                    (80, 60),
+                    cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2, cv2.LINE_AA)
+
+            # Render detections
+        mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
+                                    mp_drawing.DrawingSpec(color=(245, 117, 66), thickness=2, circle_radius=2),
+                                    mp_drawing.DrawingSpec(color=(245, 66, 230), thickness=2, circle_radius=2)
+                                    )
+    return jsonify({'lmList': lmList, 'count': math.floor(count)}) 
+
+def checkDeadlift(a, b, c, d, checkUp):
+    if c.visibility > 0.5 and d.visibility > 0.5:
+        print("Visible")
+        print(checkUp)
+        if checkUp:
+            print("Distance",math.sqrt(math.pow(a.y-c.y,2) + math.pow(b.y-d.y,2)))
+            if math.sqrt(math.pow(a.y-c.y,2) + math.pow(b.y-d.y,2))<0.009:
+                return True
+            else:
+                return False
+        else:
+            if (a.y+0.11) < (c.y) and (b.y+0.11) < (d.y):
+                stage="down"
+                return True
+            else:
+                return False
+    else:
+        print("Not Visible")
+        return False
+
+def checkHandInBox(x, y, x1, y1, x2, y2):
+    if x1 < x < x2 and y1 < y < y2:
+        return True
+    else:
+        return False
+
+if __name__ == '__main__':
+    app.run(port=3355)
+
+
+
+
+
+@app.route('/', methods = ['GET'])
+def avtivee():
+    return 'Server is activated'
+
+if __name__ == '__main__':
+    app.run(port=3355)
